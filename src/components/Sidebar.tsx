@@ -5,13 +5,19 @@ const ADMIN_LINKS = [
   { to: '/admin', label: 'Overview', end: true },
   { to: '/admin/students', label: 'Students' },
   { to: '/admin/teachers', label: 'Teachers' },
+  { to: '/admin/departments', label: 'Departments' },
   { to: '/admin/classes', label: 'Classes' },
-  { to: '/admin/departments', label: 'Departments' }
+  { to: '/admin/courses', label: 'Courses' },
+  { to: '/admin/course-offerings', label: 'Course Offerings' },
+  { to: '/admin/attendance', label: 'Attendance' },
+  { to: '/admin/excuse-requests', label: 'Excuse Requests' }
 ];
 
 const TEACHER_LINKS = [{ to: '/teacher', label: 'My classes', end: true }];
 
-const STUDENT_LINKS = [{ to: '/student', label: 'My attendance', end: true }];
+const STUDENT_LINKS = [{ to: '/student', label: 'My attendance', end: true }
+  ,{ to: '/student/attendance', label: 'Submit Excuse Request', end: true }
+];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();

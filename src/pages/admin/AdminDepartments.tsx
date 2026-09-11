@@ -19,7 +19,7 @@ export default function AdminDepartments() {
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err instanceof Error ? err.message : 'Could not load departments.'));
   }, []);
 
   async function handleCreate(e: FormEvent) {
@@ -43,8 +43,8 @@ export default function AdminDepartments() {
     setError(null);
     try {
       await apiPost('updateDepartment', {
-        departmentId: dept.DepartmentID,
-        status: dept.Status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+        departmentId: dept.departmentId,
+        status: dept.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
       });
       await load();
     } catch (err) {
@@ -93,16 +93,16 @@ export default function AdminDepartments() {
             </thead>
             <tbody>
               {departments.map((dept) => (
-                <tr key={dept.DepartmentID}>
-                  <td>{dept.DepartmentID}</td>
-                  <td>{dept.DepartmentName}</td>
-                  <td><StatusBadge value={dept.Status} /></td>
+                <tr key={dept.departmentId}>
+                  <td>{dept.departmentId}</td>
+                  <td>{dept.departmentName}</td>
+                  <td><StatusBadge value={dept.status} /></td>
                   <td>
                     <button
                       onClick={() => toggleStatus(dept)}
                       className="btn btn-outline px-2.5 py-1 text-xs"
                     >
-                      {dept.Status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      {dept.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
                 </tr>

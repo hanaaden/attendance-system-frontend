@@ -1,44 +1,41 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
-import type { ClassItem, Department, Teacher, Student, Enrollment } from '../../types';
+import type { ClassItem, Department, Student } from '../../types';
 import Spinner from '../../components/Spinner';
 import Banner from '../../components/Banner';
 import StatusBadge from '../../components/StatusBadge';
 
-const emptyForm = { className: '', departmentId: '', teacherId: '', semester: '' };
+const emptyForm = {
+  className: '',
+  departmentId: '',
+  semester: ''
+};
 
 export default function AdminClasses() {
   const [classes, setClasses] = useState<ClassItem[] | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
-  const [teachers, setTeachers] = useState<Teacher[]>([]);
   const [students, setStudents] = useState<Student[]>([]);
-  const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-
   const [selectedClass, setSelectedClass] = useState<string>('');
-  const [studentToEnroll, setStudentToEnroll] = useState('');
 
   async function load() {
     const res = await apiGet<{
       departments: Department[];
       classes: ClassItem[];
-      teachers: Teacher[];
       students: Student[];
-      enrollments: Enrollment[];
     }>('directory');
-    setDepartments(res.departments.filter((d) => d.Status === 'ACTIVE'));
+
+    setDepartments(res.departments.filter((d) => d.status === 'ACTIVE'));
     setClasses(res.classes);
-    setTeachers(res.teachers.filter((t) => t.Status === 'ACTIVE'));
-    setStudents(res.students.filter((s) => s.Status === 'ACTIVE'));
-    setEnrollments(res.enrollments);
+    setStudents(res.students.filter((s) => s.status === 'ACTIVE'));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err instanceof Error ? err.message : 'Could not load classes.'));
   }, []);
 
   async function handleCreate(e: FormEvent) {
@@ -62,8 +59,8 @@ export default function AdminClasses() {
     setError(null);
     try {
       await apiPost('updateClass', {
-        classId: item.ClassID,
-        status: item.Status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+        classId: item.classId,
+        status: item.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
       });
       await load();
     } catch (err) {
@@ -71,43 +68,16 @@ export default function AdminClasses() {
     }
   }
 
-  async function handleEnroll(e: FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setNotice(null);
-    if (!selectedClass || !studentToEnroll) return;
-    try {
-      await apiPost('enrollStudent', { classId: selectedClass, studentId: studentToEnroll });
-      setNotice('Student enrolled.');
-      setStudentToEnroll('');
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not enroll student.');
-    }
-  }
+  const departmentName = (departmentId: string) =>
+    departments.find((dep) => dep.departmentId === departmentId)?.departmentName ?? departmentId;
 
-  async function handleRemove(enrollmentId: string) {
-    setError(null);
-    try {
-      await apiPost('removeEnrollment', { enrollmentId });
-      await load();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not remove enrollment.');
-    }
-  }
-
-  const teacherName = (id: string) => teachers.find((t) => t.TeacherID === id)?.TeacherName || id;
-  const studentName = (id: string) => students.find((s) => s.StudentID === id)?.StudentName || id;
-
-  const roster = enrollments.filter(
-    (en) => en.ClassID === selectedClass && en.Status === 'ACTIVE'
-  );
+  const roster = students.filter((student) => student.classId === selectedClass);
 
   return (
     <div>
       <header className="mb-8">
         <h1 className="font-serif text-2xl text-ink">Classes</h1>
-        <p className="text-sm text-ink/60">Create classes, assign a teacher, and manage rosters.</p>
+        <p className="text-sm text-ink/60">Create classes and view each class roster by student.</p>
       </header>
 
       <form onSubmit={handleCreate} className="card mb-8 grid gap-3 p-4 sm:grid-cols-2">
@@ -118,17 +88,7 @@ export default function AdminClasses() {
             required
             value={form.className}
             onChange={(e) => setForm({ ...form, className: e.target.value })}
-            placeholder="e.g. Algebra II"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-ink">Semester</label>
-          <input
-            className="field"
-            required
-            value={form.semester}
-            onChange={(e) => setForm({ ...form, semester: e.target.value })}
-            placeholder="e.g. Fall 2026"
+            placeholder="e.g. 4C"
           />
         </div>
         <div>
@@ -141,23 +101,21 @@ export default function AdminClasses() {
           >
             <option value="">Select…</option>
             {departments.map((d) => (
-              <option key={d.DepartmentID} value={d.DepartmentID}>{d.DepartmentName}</option>
+              <option key={d.departmentId} value={d.departmentId}>
+                {d.departmentName}
+              </option>
             ))}
           </select>
         </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-ink">Teacher</label>
-          <select
+        <div className="sm:col-span-2">
+          <label className="mb-1 block text-sm font-medium text-ink">Semester</label>
+          <input
             className="field"
             required
-            value={form.teacherId}
-            onChange={(e) => setForm({ ...form, teacherId: e.target.value })}
-          >
-            <option value="">Select…</option>
-            {teachers.map((t) => (
-              <option key={t.TeacherID} value={t.TeacherID}>{t.TeacherName}</option>
-            ))}
-          </select>
+            value={form.semester}
+            onChange={(e) => setForm({ ...form, semester: e.target.value })}
+            placeholder="e.g. 2026-1"
+          />
         </div>
         <div className="sm:col-span-2">
           <button type="submit" disabled={submitting} className="btn btn-primary">
@@ -178,24 +136,24 @@ export default function AdminClasses() {
               <tr>
                 <th>ID</th>
                 <th>Class</th>
-                <th>Teacher</th>
+                <th>Department</th>
                 <th>Semester</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
-              {classes.map((item) => (
+              {classes.map((item, index) => (
                 <tr
-                  key={item.ClassID}
-                  className={`cursor-pointer ${selectedClass === item.ClassID ? 'bg-[#F1EEE3]' : ''}`}
-                  onClick={() => setSelectedClass(item.ClassID)}
+                  key={item.classId ?? item.className ?? `class-${index}`}
+                  className={`cursor-pointer ${selectedClass === item.classId ? 'bg-[#F1EEE3]' : ''}`}
+                  onClick={() => setSelectedClass(item.classId)}
                 >
-                  <td>{item.ClassID}</td>
-                  <td>{item.ClassName}</td>
-                  <td>{teacherName(item.TeacherID)}</td>
-                  <td>{item.Semester}</td>
-                  <td><StatusBadge value={item.Status} /></td>
+                  <td>{item.classId}</td>
+                  <td>{item.className}</td>
+                  <td>{departmentName(item.departmentId)}</td>
+                  <td>{item.semester}</td>
+                  <td><StatusBadge value={item.status} /></td>
                   <td>
                     <button
                       onClick={(evt) => {
@@ -204,7 +162,7 @@ export default function AdminClasses() {
                       }}
                       className="btn btn-outline px-2.5 py-1 text-xs"
                     >
-                      {item.Status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      {item.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
                 </tr>
@@ -217,51 +175,31 @@ export default function AdminClasses() {
       {selectedClass && (
         <div>
           <h2 className="mb-3 font-serif text-lg text-ink">
-            Roster &mdash; {classes?.find((c) => c.ClassID === selectedClass)?.ClassName}
+            Roster &mdash; {classes?.find((c) => c.classId === selectedClass)?.className}
           </h2>
-
-          <form onSubmit={handleEnroll} className="mb-4 flex items-end gap-3">
-            <div className="flex-1">
-              <label className="mb-1 block text-sm font-medium text-ink">Enroll a student</label>
-              <select
-                className="field"
-                value={studentToEnroll}
-                onChange={(e) => setStudentToEnroll(e.target.value)}
-              >
-                <option value="">Select…</option>
-                {students.map((s) => (
-                  <option key={s.StudentID} value={s.StudentID}>{s.StudentName}</option>
-                ))}
-              </select>
-            </div>
-            <button type="submit" className="btn btn-primary">Enroll</button>
-          </form>
 
           <div className="card overflow-x-auto">
             <table className="ledger">
               <thead>
                 <tr>
                   <th>Student</th>
-                  <th></th>
+                  <th>Email</th>
+                  <th>Status</th>
                 </tr>
               </thead>
               <tbody>
-                {roster.map((en) => (
-                  <tr key={en.EnrollmentID}>
-                    <td>{studentName(en.StudentID)}</td>
-                    <td>
-                      <button
-                        onClick={() => handleRemove(en.EnrollmentID)}
-                        className="btn btn-outline px-2.5 py-1 text-xs"
-                      >
-                        Remove
-                      </button>
-                    </td>
+                {roster.map((student, index) => (
+                  <tr key={student.studentId ?? student.email ?? `roster-student-${index}`}>
+                    <td>{student.studentName}</td>
+                    <td>{student.email}</td>
+                    <td><StatusBadge value={student.status} /></td>
                   </tr>
                 ))}
                 {roster.length === 0 && (
-                  <tr>
-                    <td colSpan={2} className="text-center text-ink/50">No students enrolled yet.</td>
+                  <tr key="empty-roster">
+                    <td colSpan={3} className="text-center text-ink/50">
+                      No students assigned to this class yet.
+                    </td>
                   </tr>
                 )}
               </tbody>

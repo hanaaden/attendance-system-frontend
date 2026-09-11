@@ -1,32 +1,42 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
-import type { Student, Department } from '../../types';
+import type { ClassItem, Department, Student } from '../../types';
 import Spinner from '../../components/Spinner';
 import Banner from '../../components/Banner';
 import StatusBadge from '../../components/StatusBadge';
 
-const emptyForm = { studentName: '', email: '', departmentId: '', password: '' };
+const emptyForm = {
+  studentName: '',
+  email: '',
+  departmentId: '',
+  classId: '',
+  password: ''
+};
 
 export default function AdminStudents() {
   const [students, setStudents] = useState<Student[] | null>(null);
   const [departments, setDepartments] = useState<Department[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
-    const [s, d] = await Promise.all([
-      apiGet<{ students: Student[] }>('students'),
-      apiGet<{ departments: Department[] }>('departments')
-    ]);
-    setStudents(s.students);
-    setDepartments(d.departments.filter((dep) => dep.Status === 'ACTIVE'));
+    const res = await apiGet<{
+      students: Student[];
+      departments: Department[];
+      classes: ClassItem[];
+    }>('directory');
+
+    setStudents(res.students);
+    setDepartments(res.departments.filter((dep) => dep.status === 'ACTIVE'));
+    setClasses(res.classes.filter((item) => item.status === 'ACTIVE'));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err instanceof Error ? err.message : 'Could not load students.'));
   }, []);
 
   async function handleCreate(e: FormEvent) {
@@ -50,8 +60,8 @@ export default function AdminStudents() {
     setError(null);
     try {
       await apiPost('updateStudent', {
-        studentId: student.StudentID,
-        status: student.Status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+        studentId: student.studentId,
+        status: student.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
       });
       await load();
     } catch (err) {
@@ -59,11 +69,17 @@ export default function AdminStudents() {
     }
   }
 
+  const departmentName = (departmentId: string) =>
+    departments.find((dep) => dep.departmentId === departmentId)?.departmentName ?? departmentId;
+
+  const className = (classId: string) =>
+    classes.find((item) => item.classId === classId)?.className ?? classId;
+
   return (
     <div>
       <header className="mb-8">
         <h1 className="font-serif text-2xl text-ink">Students</h1>
-        <p className="text-sm text-ink/60">Create student accounts and assign them to departments.</p>
+        <p className="text-sm text-ink/60">Create student accounts, assign them to a class, and manage status.</p>
       </header>
 
       <form onSubmit={handleCreate} className="card mb-8 grid gap-3 p-4 sm:grid-cols-2">
@@ -96,13 +112,29 @@ export default function AdminStudents() {
           >
             <option value="">Select…</option>
             {departments.map((d) => (
-              <option key={d.DepartmentID} value={d.DepartmentID}>
-                {d.DepartmentName}
+              <option key={d.departmentId} value={d.departmentId}>
+                {d.departmentName}
               </option>
             ))}
           </select>
         </div>
         <div>
+          <label className="mb-1 block text-sm font-medium text-ink">Class</label>
+          <select
+            className="field"
+            required
+            value={form.classId}
+            onChange={(e) => setForm({ ...form, classId: e.target.value })}
+          >
+            <option value="">Select…</option>
+            {classes.map((item) => (
+              <option key={item.classId} value={item.classId}>
+                {item.className}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
           <label className="mb-1 block text-sm font-medium text-ink">Temporary password</label>
           <input
             type="password"
@@ -133,24 +165,26 @@ export default function AdminStudents() {
                 <th>Name</th>
                 <th>Email</th>
                 <th>Department</th>
+                <th>Class</th>
                 <th>Status</th>
                 <th></th>
               </tr>
             </thead>
             <tbody>
               {students.map((student) => (
-                <tr key={student.StudentID}>
-                  <td>{student.StudentID}</td>
-                  <td>{student.StudentName}</td>
-                  <td>{student.Email}</td>
-                  <td>{student.DepartmentID}</td>
-                  <td><StatusBadge value={student.Status} /></td>
+                <tr key={student.studentId}>
+                  <td>{student.studentId}</td>
+                  <td>{student.studentName}</td>
+                  <td>{student.email}</td>
+                  <td>{departmentName(student.departmentId)}</td>
+                  <td>{className(student.classId)}</td>
+                  <td><StatusBadge value={student.status} /></td>
                   <td>
                     <button
                       onClick={() => toggleStatus(student)}
                       className="btn btn-outline px-2.5 py-1 text-xs"
                     >
-                      {student.Status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      {student.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
                 </tr>

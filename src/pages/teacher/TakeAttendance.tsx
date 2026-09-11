@@ -1,8 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAuth } from '../../context/AuthContext';
-import type { AttendanceRecord, AttendanceStatus, TeacherClassSummary } from '../../types';
+import type { AttendanceRecord, AttendanceStatus, ClassItem, Course, CourseOffering, Student } from '../../types';
 import Spinner from '../../components/Spinner';
 import Banner from '../../components/Banner';
 
@@ -11,57 +11,76 @@ function today(): string {
 }
 
 export default function TakeAttendance() {
-  const { classId = '' } = useParams();
+  const { offeringId = '' } = useParams();
   const { user } = useAuth();
-  const [cls, setCls] = useState<TeacherClassSummary | null>(null);
+  const [selectedOffering, setSelectedOffering] = useState<CourseOffering | null>(null);
+  const [students, setStudents] = useState<Student[]>([]);
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
+  const [classes, setClasses] = useState<ClassItem[]>([]);
+  const [courses, setCourses] = useState<Course[]>([]);
   const [date, setDate] = useState(today());
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!user?.teacherId) return;
-    setLoading(true);
-    try {
-      const [dashboard, attendance] = await Promise.all([
-        apiGet<{ classes: TeacherClassSummary[] }>('teacherDashboard', {
-          teacherId: user.teacherId
-        }),
-        apiGet<{ attendance: AttendanceRecord[] }>('attendance', { classId, date })
-      ]);
-      setCls(dashboard.classes.find((c) => c.classId === classId) || null);
-      setRecords(attendance.attendance);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not load the roster.');
-    } finally {
-      setLoading(false);
-    }
-  }, [classId, date, user?.teacherId]);
-
   useEffect(() => {
+    async function load() {
+      if (!user?.teacherId) return;
+      setLoading(true);
+      try {
+        const [dashboard, directory, attendance] = await Promise.all([
+          apiGet<{ teacher: { teacherName: string }; offerings: CourseOffering[] }>('teacherDashboard', {
+            teacherId: user.teacherId
+          }),
+          apiGet<{ students: Student[]; classes: ClassItem[]; courses: Course[] }>('directory'),
+          apiGet<{ attendance: AttendanceRecord[] }>('attendance', { offeringId, date })
+        ]);
+
+        const nextOfferings = dashboard.offerings ?? [];
+        const currentOffering = nextOfferings.find((offering) => offering.offeringId === offeringId) ?? null;
+        setSelectedOffering(currentOffering);
+
+        const classId = currentOffering?.classId ?? '';
+        setClasses(directory.classes ?? []);
+        setCourses(directory.courses ?? []);
+        setStudents((directory.students ?? []).filter((student) => student.classId === classId));
+        setRecords(attendance.attendance ?? []);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Could not load the roster.');
+      } finally {
+        setLoading(false);
+      }
+    }
+
     load();
-  }, [load]);
+  }, [date, offeringId, user?.teacherId]);
 
   async function mark(studentId: string, status: AttendanceStatus) {
-    if (!user?.teacherId) return;
+    if (!selectedOffering || !user?.teacherId) return;
     setSavingId(studentId);
     setError(null);
     try {
-      const existing = records.find((r) => r.StudentID === studentId);
+      const student = students.find((item) => item.studentId === studentId);
+      const existing = records.find((record) => record.studentId === studentId);
+
       if (existing) {
-        await apiPost('updateAttendance', { attendanceId: existing.AttendanceID, status });
+        await apiPost('updateAttendance', { attendanceId: existing.attendanceId, status });
       } else {
-        await apiPost('attendance', {
-          classId,
+        await apiPost('recordAttendance', {
+          offeringId: selectedOffering.offeringId,
+          classId: selectedOffering.classId,
+          courseId: selectedOffering.courseId,
           studentId,
+          studentName: student?.studentName ?? '',
+          date,
           status,
-          recordedBy: user.teacherId,
-          date
+          recordedBy: user.teacherId
         });
       }
-      await load();
+
+      const refreshed = await apiGet<{ attendance: AttendanceRecord[] }>('attendance', { offeringId, date });
+      setRecords(refreshed.attendance ?? []);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not save attendance.');
     } finally {
@@ -69,19 +88,36 @@ export default function TakeAttendance() {
     }
   }
 
-  if (loading && !cls) return <Spinner label="Loading roster…" />;
-  if (!cls) return <Banner kind="error">Class not found.</Banner>;
+  const currentClass = classes.find((item) => item.classId === selectedOffering?.classId)?.className ?? selectedOffering?.classId;
+  const currentCourse = courses.find((course) => course.courseId === selectedOffering?.courseId)?.courseName ?? selectedOffering?.courseId;
+
+  if (!selectedOffering && !loading) {
+    return (
+      <div>
+        <Link to="/teacher" className="mb-4 inline-block text-sm text-board hover:underline">
+          &larr; Back to my offerings
+        </Link>
+        <div className="card p-6">
+          <p className="text-sm text-ink/60">No offering found.</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading && !selectedOffering) return <Spinner label="Loading roster…" />;
 
   return (
     <div>
       <Link to="/teacher" className="mb-4 inline-block text-sm text-board hover:underline">
-        &larr; Back to my classes
+        &larr; Back to my offerings
       </Link>
 
       <header className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-serif text-2xl text-ink">{cls.className}</h1>
-          <p className="text-sm text-ink/60">{cls.semester} &middot; {cls.studentCount} students</p>
+          <h1 className="font-serif text-2xl text-ink">{currentCourse}</h1>
+          <p className="text-sm text-ink/60">
+            {currentClass} &middot; {selectedOffering?.semester}
+          </p>
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-ink">Date</label>
@@ -94,7 +130,11 @@ export default function TakeAttendance() {
         </div>
       </header>
 
-      {error && <div className="mb-4"><Banner kind="error">{error}</Banner></div>}
+      {error && (
+        <div className="mb-4">
+          <Banner kind="error">{error}</Banner>
+        </div>
+      )}
 
       <div className="card overflow-x-auto">
         <table className="ledger">
@@ -107,21 +147,25 @@ export default function TakeAttendance() {
             </tr>
           </thead>
           <tbody>
-            {cls.students.map((student) => {
-              const record = records.find((r) => r.StudentID === student.StudentID);
-              const busy = savingId === student.StudentID;
+            {students.map((student) => {
+              const record = records.find((item) => item.studentId === student.studentId);
+              const busy = savingId === student.studentId;
               return (
-                <tr key={student.StudentID}>
-                  <td>{student.StudentName}</td>
-                  <td>{student.Email}</td>
+                <tr key={student.studentId}>
+                  <td>{student.studentName}</td>
+                  <td>{student.email}</td>
                   <td>
                     {record ? (
                       <span
                         className={
-                          record.Status === 'PRESENT' ? 'text-pen-green' : 'text-pen-red'
+                          record.status === 'PRESENT'
+                            ? 'text-pen-green'
+                            : record.status === 'EXCUSED'
+                            ? 'text-board'
+                            : 'text-pen-red'
                         }
                       >
-                        {record.Status}
+                        {record.status}
                       </span>
                     ) : (
                       <span className="text-ink/40">Not recorded</span>
@@ -131,14 +175,14 @@ export default function TakeAttendance() {
                     <div className="flex gap-2">
                       <button
                         disabled={busy}
-                        onClick={() => mark(student.StudentID, 'PRESENT')}
+                        onClick={() => mark(student.studentId, 'PRESENT')}
                         className="btn btn-outline border-pen-green px-2.5 py-1 text-xs text-pen-green hover:bg-pen-green hover:text-chalk disabled:opacity-50"
                       >
                         Present
                       </button>
                       <button
                         disabled={busy}
-                        onClick={() => mark(student.StudentID, 'ABSENT')}
+                        onClick={() => mark(student.studentId, 'ABSENT')}
                         className="btn btn-outline border-pen-red px-2.5 py-1 text-xs text-pen-red hover:bg-pen-red hover:text-chalk disabled:opacity-50"
                       >
                         Absent
@@ -148,9 +192,11 @@ export default function TakeAttendance() {
                 </tr>
               );
             })}
-            {cls.students.length === 0 && (
+            {students.length === 0 && (
               <tr>
-                <td colSpan={4} className="text-center text-ink/50">No students enrolled yet.</td>
+                <td colSpan={4} className="text-center text-ink/50">
+                  No students assigned to this class yet.
+                </td>
               </tr>
             )}
           </tbody>

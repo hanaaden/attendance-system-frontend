@@ -1,7 +1,7 @@
 import type { FormEvent } from 'react';
 import { useEffect, useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
-import type { Teacher, Department } from '../../types';
+import type { Department, Teacher } from '../../types';
 import Spinner from '../../components/Spinner';
 import Banner from '../../components/Banner';
 import StatusBadge from '../../components/StatusBadge';
@@ -17,16 +17,13 @@ export default function AdminTeachers() {
   const [submitting, setSubmitting] = useState(false);
 
   async function load() {
-    const [t, d] = await Promise.all([
-      apiGet<{ teachers: Teacher[] }>('teachers'),
-      apiGet<{ departments: Department[] }>('departments')
-    ]);
-    setTeachers(t.teachers);
-    setDepartments(d.departments.filter((dep) => dep.Status === 'ACTIVE'));
+    const res = await apiGet<{ teachers: Teacher[]; departments: Department[] }>('directory');
+    setTeachers(res.teachers);
+    setDepartments(res.departments.filter((dep) => dep.status === 'ACTIVE'));
   }
 
   useEffect(() => {
-    load().catch((err) => setError(err.message));
+    load().catch((err) => setError(err instanceof Error ? err.message : 'Could not load teachers.'));
   }, []);
 
   async function handleCreate(e: FormEvent) {
@@ -50,14 +47,17 @@ export default function AdminTeachers() {
     setError(null);
     try {
       await apiPost('updateTeacher', {
-        teacherId: teacher.TeacherID,
-        status: teacher.Status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
+        teacherId: teacher.teacherId,
+        status: teacher.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE'
       });
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not update teacher.');
     }
   }
+
+  const departmentName = (departmentId: string) =>
+    departments.find((dep) => dep.departmentId === departmentId)?.departmentName ?? departmentId;
 
   return (
     <div>
@@ -96,8 +96,8 @@ export default function AdminTeachers() {
           >
             <option value="">Select…</option>
             {departments.map((d) => (
-              <option key={d.DepartmentID} value={d.DepartmentID}>
-                {d.DepartmentName}
+              <option key={d.departmentId} value={d.departmentId}>
+                {d.departmentName}
               </option>
             ))}
           </select>
@@ -139,18 +139,18 @@ export default function AdminTeachers() {
             </thead>
             <tbody>
               {teachers.map((teacher) => (
-                <tr key={teacher.TeacherID}>
-                  <td>{teacher.TeacherID}</td>
-                  <td>{teacher.TeacherName}</td>
-                  <td>{teacher.Email}</td>
-                  <td>{teacher.DepartmentID}</td>
-                  <td><StatusBadge value={teacher.Status} /></td>
+                <tr key={teacher.teacherId}>
+                  <td>{teacher.teacherId}</td>
+                  <td>{teacher.teacherName}</td>
+                  <td>{teacher.email}</td>
+                  <td>{departmentName(teacher.departmentId)}</td>
+                  <td><StatusBadge value={teacher.status} /></td>
                   <td>
                     <button
                       onClick={() => toggleStatus(teacher)}
                       className="btn btn-outline px-2.5 py-1 text-xs"
                     >
-                      {teacher.Status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                      {teacher.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
                     </button>
                   </td>
                 </tr>
