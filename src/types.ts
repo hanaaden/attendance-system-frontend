@@ -1,22 +1,20 @@
 export type Role = 'ADMIN' | 'TEACHER' | 'STUDENT';
-
 export type Status = 'ACTIVE' | 'INACTIVE';
-
 export type AttendanceStatus = 'PRESENT' | 'ABSENT';
 
-export interface User {
+export interface AuthUser {
   userId: string;
   email: string;
   role: Role;
-  teacherId?: string;
-  studentId?: string;
-  status?: string;
+  teacherId: string;
+  studentId: string;
+  status: Status;
 }
 
 export interface Department {
   DepartmentID: string;
   DepartmentName: string;
-  Status: string;
+  Status: Status;
 }
 
 export interface Teacher {
@@ -24,7 +22,7 @@ export interface Teacher {
   TeacherName: string;
   Email: string;
   DepartmentID: string;
-  Status: string;
+  Status: Status;
 }
 
 export interface Student {
@@ -32,7 +30,7 @@ export interface Student {
   StudentName: string;
   Email: string;
   DepartmentID: string;
-  Status: string;
+  Status: Status;
 }
 
 export interface ClassItem {
@@ -41,17 +39,17 @@ export interface ClassItem {
   DepartmentID: string;
   TeacherID: string;
   Semester: string;
-  Status: string;
+  Status: Status;
 }
 
 export interface Enrollment {
   EnrollmentID: string;
   ClassID: string;
   StudentID: string;
-  Status: string;
+  Status: Status;
 }
 
-export interface Attendance {
+export interface AttendanceRecord {
   AttendanceID: string;
   Timestamp: string;
   Date: string;
@@ -60,18 +58,6 @@ export interface Attendance {
   StudentName: string;
   Status: AttendanceStatus;
   RecordedBy: string;
-}
-
-export interface StudentAttendanceSummary {
-  studentId: string;
-  studentName: string;
-  email: string;
-  departmentId: string;
-  status: string;
-  total: number;
-  present: number;
-  absent: number;
-  percentage: number;
 }
 
 export interface AdminSummary {
@@ -84,21 +70,24 @@ export interface AdminSummary {
   attendanceRate: string;
 }
 
-export interface AdminDashboardData {
-  status: string;
-  summary: AdminSummary;
-  students: Student[];
-  studentAttendance: StudentAttendanceSummary[];
-  teachers: Teacher[];
-  classes: ClassItem[];
+export interface StudentAttendanceSummary {
+  studentId: string;
+  studentName: string;
+  email: string;
+  departmentId: string;
+  status: Status;
+  total: number;
+  present: number;
+  absent: number;
+  percentage: number;
 }
 
-export interface TeacherClass {
+export interface TeacherClassSummary {
   classId: string;
   className: string;
   departmentId: string;
   semester: string;
-  status: string;
+  status: Status;
   studentCount: number;
   present: number;
   absent: number;
@@ -107,19 +96,7 @@ export interface TeacherClass {
   students: Student[];
 }
 
-export interface TeacherDashboardData {
-  status: string;
-  teacher: {
-    teacherId: string;
-    teacherName: string;
-    email: string;
-    departmentId: string;
-    status: string;
-  };
-  classes: TeacherClass[];
-}
-
-export interface StudentClass {
+export interface StudentClassSummary {
   classId: string;
   className: string;
   departmentId: string;
@@ -129,22 +106,4 @@ export interface StudentClass {
   present: number;
   absent: number;
   percentage: number;
-}
-
-export interface StudentDashboardData {
-  status: string;
-  student: {
-    studentId: string;
-    studentName: string;
-    email: string;
-    departmentId: string;
-    status: string;
-  };
-  summary: {
-    total: number;
-    present: number;
-    absent: number;
-    percentage: number;
-  };
-  classes: StudentClass[];
 }
